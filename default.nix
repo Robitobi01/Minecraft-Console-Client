@@ -6,6 +6,10 @@
 }:
 
 let
+  buildDotnetModule = pkgs.buildDotnetModule.override {
+    inherit dotnet-sdk;
+  };
+
   consoleInteractive = pkgs.fetchFromGitHub {
     owner = "breadbyte";
     repo = "ConsoleInteractive";
@@ -13,7 +17,7 @@ let
     hash = "sha256-j/AO+Syt0W7Bi+Up0nwVRqJQCckrKzHqOGV8Kg2yk9o=";
   };
 in
-pkgs.buildDotnetModule {
+buildDotnetModule {
   name = "minecraft-client";
 
   src = lib.cleanSourceWith {
