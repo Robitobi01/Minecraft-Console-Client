@@ -6,10 +6,6 @@
 }:
 
 let
-  buildDotnetModule = pkgs.buildDotnetModule.override {
-    inherit dotnet-sdk;
-  };
-
   consoleInteractive = pkgs.fetchFromGitHub {
     owner = "breadbyte";
     repo = "ConsoleInteractive";
@@ -17,7 +13,7 @@ let
     hash = "sha256-j/AO+Syt0W7Bi+Up0nwVRqJQCckrKzHqOGV8Kg2yk9o=";
   };
 in
-buildDotnetModule {
+pkgs.stdenvNoCC.mkDerivation {
   name = "minecraft-client";
 
   src = lib.cleanSourceWith {
@@ -39,12 +35,9 @@ buildDotnetModule {
       && !lib.hasPrefix "tools/" rel;
   };
 
-  inherit dotnet-sdk runtimeIdentifier;
-  runtimeId = runtimeIdentifier;
+  nativeBuildInputs = [ dotnet-sdk pkgs.makeWrapper ];
 
-  projectFile = "MinecraftClient/MinecraftClient.csproj";
-  installPath = "${placeholder "out"}/lib/minecraft-client";
-  nugetDeps = pkgs.mkNugetDeps {
+  buildInputs = dotnet-sdk.packages ++ [ (pkgs.mkNugetDeps {
     name = "minecraft-client";
     nugetDeps = { fetchNuGet }: map fetchNuGet (builtins.fromJSON ''
 [
@@ -172,14 +165,10 @@ buildDotnetModule {
   { "pname": "Wcwidth", "version": "3.0.0", "hash": "sha256-ZzmKUGtn2jwEel5xFMqKdbvmiuIREoS9nRkekYAXm/o=" }
 ]
     '');
-  };
-  buildType = "Release";
-  selfContainedBuild = true;
-  useAppHost = true;
+  }) ];
+
   doCheck = false;
-  dontDotnetCheck = true;
   keepNugetConfig = true;
-  executables = [ "MinecraftClient" ];
 
   DOTNET_CLI_TELEMETRY_OPTOUT = "1";
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1";
@@ -189,24 +178,59 @@ buildDotnetModule {
     cp -R --no-preserve=mode,ownership ${consoleInteractive} ConsoleInteractive
   '';
 
-  dotnetFlags = [
-    "-p:ContinuousIntegrationBuild=true"
-    "-p:Deterministic=true"
-    "-p:DebugType=none"
-    "-p:DebugSymbols=false"
-    "-p:EnableAvaloniaCompilationByDefault=false"
-  ];
+  buildPhase = ''
+    runHook preBuild
 
-  dotnetInstallFlags = [
-    "-p:PublishSingleFile=true"
-    "-p:IncludeNativeLibrariesForSelfExtract=true"
-    "-p:PublishTrimmed=false"
-    "-p:PublishReadyToRun=true"
-    "-p:TieredCompilation=true"
-    "-p:TieredPGO=true"
-  ];
+    dotnet restore MinecraftClient/MinecraftClient.csproj \
+      --runtime ${runtimeIdentifier} \
+      -p:ContinuousIntegrationBuild=true \
+      -p:Deterministic=true \
+      -p:SelfContained=true \
+      -p:PublishReadyToRun=true \
+      -p:NuGetAudit=false
 
-  postFixup = ''
-    mv "$out/bin/MinecraftClient" "$out/bin/minecraft-client"
+    dotnet build MinecraftClient/MinecraftClient.csproj \
+      --configuration Release \
+      --runtime ${runtimeIdentifier} \
+      --no-restore \
+      -maxcpucount:$NIX_BUILD_CORES \
+      -p:ContinuousIntegrationBuild=true \
+      -p:Deterministic=true \
+      -p:SelfContained=true \
+      -p:DebugType=none \
+      -p:DebugSymbols=false \
+      -p:PublishReadyToRun=true \
+      -p:EnableAvaloniaCompilationByDefault=false
+
+    runHook postBuild
+  '';
+
+  installPhase = ''
+    runHook preInstall
+
+    dotnet publish MinecraftClient/MinecraftClient.csproj \
+      --configuration Release \
+      --runtime ${runtimeIdentifier} \
+      --self-contained \
+      --no-restore \
+      --no-build \
+      --output "$out/lib/minecraft-client" \
+      -p:ContinuousIntegrationBuild=true \
+      -p:Deterministic=true \
+      -p:SelfContained=true \
+      -p:DebugType=none \
+      -p:DebugSymbols=false \
+      -p:PublishSingleFile=true \
+      -p:IncludeNativeLibrariesForSelfExtract=true \
+      -p:PublishTrimmed=false \
+      -p:PublishReadyToRun=true \
+      -p:TieredCompilation=true \
+      -p:TieredPGO=true \
+      -p:EnableAvaloniaCompilationByDefault=false
+
+    makeWrapper "$out/lib/minecraft-client/MinecraftClient" "$out/bin/minecraft-client" \
+      --prefix LD_LIBRARY_PATH : ${dotnet-sdk.icu}/lib
+
+    runHook postInstall
   '';
 }
