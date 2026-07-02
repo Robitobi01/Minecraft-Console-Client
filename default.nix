@@ -1,7 +1,7 @@
 {
   pkgs ? import <nixpkgs> { },
   lib ? pkgs.lib,
-  dotnet-sdk ? pkgs.dotnetCorePackages.sdk_10_0,
+  dotnetSdk ? pkgs.dotnetCorePackages.sdk_10_0,
   runtimeIdentifier ? "linux-x64",
 }:
 
@@ -35,9 +35,9 @@ pkgs.stdenvNoCC.mkDerivation {
       && !lib.hasPrefix "tools/" rel;
   };
 
-  nativeBuildInputs = [ dotnet-sdk pkgs.makeWrapper ];
+  nativeBuildInputs = [ dotnetSdk pkgs.makeWrapper ];
 
-  buildInputs = dotnet-sdk.packages ++ [ (pkgs.mkNugetDeps {
+  buildInputs = dotnetSdk.packages ++ [ (pkgs.mkNugetDeps {
     name = "minecraft-client";
     nugetDeps = { fetchNuGet }: map fetchNuGet (builtins.fromJSON ''
 [
@@ -229,7 +229,7 @@ pkgs.stdenvNoCC.mkDerivation {
       -p:EnableAvaloniaCompilationByDefault=false
 
     makeWrapper "$out/lib/minecraft-client/MinecraftClient" "$out/bin/minecraft-client" \
-      --prefix LD_LIBRARY_PATH : ${dotnet-sdk.icu}/lib
+      --prefix LD_LIBRARY_PATH : ${dotnetSdk.icu}/lib
 
     runHook postInstall
   '';
